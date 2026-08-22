@@ -31,13 +31,19 @@ export function ReportModal({ open, peerId = 4821, onClose }: ReportModalProps) 
   const handleSubmit = async () => {
     if (!reason) return;
     setSubmitting(true);
-    await submitReport({
-      reason,
-      peerId,
-      timestamp: Date.now(),
-    });
-    setSubmitting(false);
-    setSent(true);
+    const result = await submitReport({
+  reason,
+  peerId,
+  timestamp: Date.now(),
+});
+
+setSubmitting(false);
+
+if (result.success) {
+  setSent(true);
+} else {
+  console.error("Report submission failed.");
+}
   };
 
   return (

@@ -116,20 +116,55 @@ export const PEER_REPLIES: BiText[] = [
 /**
  * Safety detection keyword datasets.
  */
+/**
+ * MVP multilingual safety keyword datasets.
+ *
+ * These are simple keyword/phrase checks, not a clinical
+ * or production-grade safety classifier.
+ */
+
 export const CRISIS_KEYWORDS: readonly string[] = [
+  // English
   "hurt myself",
   "kill myself",
+  "killing myself",
   "suicide",
   "suicidal",
   "end my life",
   "end it all",
   "want to die",
+  "wanna die",
+  "wish i was dead",
+  "wish i were dead",
   "self harm",
   "self-harm",
   "no reason to live",
+  "no reason for me to live",
+  "better off dead",
+
+  // Hindi
+  "खुद को नुकसान",
+  "खुदको नुकसान",
+  "अपने आप को नुकसान",
+  "अपनी जान लेना",
+  "अपनी जान ले लूं",
+  "जान से मार",
+  "मर जाना चाहता",
+  "मर जाना चाहती",
+  "मरना चाहता",
+  "मरना चाहती",
+  "मैं मरना चाहता",
+  "मैं मरना चाहती",
+  "जीने का कोई कारण नहीं",
+  "जीने की कोई वजह नहीं",
+  "जीने का मन नहीं",
+  "आत्महत्या",
+  "आत्महत्या करना",
+  "आत्महत्या कर",
 ];
 
 export const ABUSE_KEYWORDS: readonly string[] = [
+  // English
   "stupid",
   "idiot",
   "shut up",
@@ -137,19 +172,48 @@ export const ABUSE_KEYWORDS: readonly string[] = [
   "dumb",
   "loser",
   "fuck",
+  "fucking",
   "shit",
   "bastard",
+
+  // Hindi
+  "बेवकूफ",
+  "बेवकूफ हो",
+  "पागल",
+  "चुप हो जाओ",
+  "चुप रहो",
+  "नफरत",
+  "गधा",
+  "कमीना",
+  "हरामी",
 ];
 
 export const HARMFUL_ADVICE_KEYWORDS: readonly string[] = [
+  // English
   "stop taking your medication",
   "stop your medication",
   "don't take your medicine",
+  "do not take your medicine",
+  "don't take medication",
+  "do not take medication",
+  "stop taking medicine",
   "miracle cure",
-  "bleach",
+  "drink bleach",
+  "bleach cures",
   "vaccines cause",
   "doctors are hiding",
   "no medicine needed",
+
+  // Hindi
+  "दवा लेना बंद",
+  "दवाई लेना बंद",
+  "दवा मत लो",
+  "दवाई मत लो",
+  "दवा की जरूरत नहीं",
+  "दवाई की जरूरत नहीं",
+  "डॉक्टर की जरूरत नहीं",
+  "चमत्कारी इलाज",
+  "वैक्सीन मत लगवाओ",
 ];
 
 /**

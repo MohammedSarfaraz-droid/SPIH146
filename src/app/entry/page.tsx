@@ -7,14 +7,28 @@ import { Button } from "@/components/ui/button";
 import { FlowShell } from "@/components/layout/flow-shell";
 import { IdentityCard } from "@/components/features/flow/identity-card";
 import { useSessionIdentity } from "@/hooks/use-session-identity";
+import { createUserProfile } from "@/lib/api";
 
 function EntryContent() {
   const router = useRouter();
-  const { peerId, shufflePeerId } = useSessionIdentity();
+  const { peerId, shufflePeerId, signInAnonymous, authLoading } =
+    useSessionIdentity();
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
+  try {
+    const user = await signInAnonymous();
+
+    await createUserProfile({
+      uid: user.uid,
+      anonymousId: peerId,
+      language: "en",
+    });
+
     router.push(`/language?peerId=${peerId}`);
-  };
+  } catch (error) {
+    console.error("Failed to create anonymous session:", error);
+  }
+};
 
   const handleExit = () => {
     router.push("/");
@@ -36,7 +50,12 @@ function EntryContent() {
           <IdentityCard peerId={peerId} onShuffle={shufflePeerId} />
         </div>
 
-        <Button size="lg" className="mt-7 w-full" onClick={handleContinue}>
+        <Button
+          size="lg"
+          className="mt-7 w-full"
+          onClick={handleContinue}
+          disabled={authLoading}
+        >
           Continue anonymously
           <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
         </Button>
@@ -52,7 +71,13 @@ function EntryContent() {
 
 export default function EntryPage() {
   return (
-    <Suspense fallback={<div className="min-h-dvh flex items-center justify-center bg-paper font-mono text-xs text-ink-faint">Loading anonymous session...</div>}>
+    <Suspense
+      fallback={
+        <div className="min-h-dvh flex items-center justify-center bg-paper font-mono text-xs text-ink-faint">
+          Loading anonymous session...
+        </div>
+      }
+    >
       <EntryContent />
     </Suspense>
   );
