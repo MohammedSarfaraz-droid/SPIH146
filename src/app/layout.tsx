@@ -57,6 +57,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
+      data-scroll-behavior="smooth"
       className={`${bricolage.variable} ${manrope.variable} ${ibmPlexMono.variable} ${mukta.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">{children}</body>

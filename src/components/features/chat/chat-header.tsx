@@ -4,6 +4,7 @@ import type { Lang } from "@/types";
 
 export interface ChatHeaderProps {
   userLang: Lang;
+  peerLang?: Lang;
   peerId?: number;
   onReport: () => void;
   onLeave: () => void;
@@ -11,11 +12,13 @@ export interface ChatHeaderProps {
 
 export function ChatHeader({
   userLang,
+  peerLang,
   peerId,
   onReport,
   onLeave,
 }: ChatHeaderProps) {
-  const peer = LANG_META[userLang === "en" ? "hi" : "en"];
+  const effectivePeerLang = peerLang || (userLang === "en" ? "hi" : "en");
+  const peer = LANG_META[effectivePeerLang];
 
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-cream/90 backdrop-blur-md">
@@ -43,7 +46,9 @@ export function ChatHeader({
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
           <span className="hidden items-center gap-1.5 rounded-full border border-line bg-paper px-3 py-1.5 font-mono text-[11px] font-medium text-ink-soft md:inline-flex">
             <Languages className="h-3.5 w-3.5 text-cobalt" />
-            {LANG_META[userLang].native} ↔ {peer.native}
+            {userLang === effectivePeerLang
+              ? LANG_META[userLang].native
+              : `${LANG_META[userLang].native} ↔ ${peer.native}`}
           </span>
 
           <button

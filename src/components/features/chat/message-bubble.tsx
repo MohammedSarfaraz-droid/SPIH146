@@ -32,6 +32,7 @@ export interface MessageBubbleProps {
   /** Translation of a peer message in the user's language */
   translation?: string | null;
   userLang: Lang;
+  peerLang?: Lang;
   flaggedAdvice?: boolean;
   time: string;
 }
@@ -41,10 +42,12 @@ export function MessageBubble({
   text,
   translation,
   userLang,
+  peerLang,
   flaggedAdvice,
   time,
 }: MessageBubbleProps) {
   const isUser = side === "user";
+  const isMultilingual = peerLang ? peerLang !== userLang : true;
 
   return (
     <div
@@ -62,7 +65,9 @@ export function MessageBubble({
         )}
       >
         <p className="text-[14.5px] leading-relaxed tracking-tight">{text}</p>
-        {translation ? <TranslationBlock text={translation} /> : null}
+        {translation && translation !== text ? (
+          <TranslationBlock text={translation} />
+        ) : null}
       </div>
 
       <div
@@ -72,7 +77,9 @@ export function MessageBubble({
         )}
       >
         <span className="font-mono text-[10.5px] text-ink-faint">{time}</span>
-        {isUser && !flaggedAdvice ? <TranslationChip userLang={userLang} /> : null}
+        {isUser && !flaggedAdvice && isMultilingual ? (
+          <TranslationChip userLang={userLang} />
+        ) : null}
         {flaggedAdvice ? (
           <span className="inline-flex max-w-[260px] items-center gap-1 rounded-full border border-warm-line bg-warm-tint px-2 py-0.5 text-left text-[10.5px] font-semibold leading-snug text-warm">
             <TriangleAlert className="h-3 w-3 shrink-0" />

@@ -114,13 +114,7 @@ export const PEER_REPLIES: BiText[] = [
 ];
 
 /**
- * Safety detection keyword datasets.
- */
-/**
  * MVP multilingual safety keyword datasets.
- *
- * These are simple keyword/phrase checks, not a clinical
- * or production-grade safety classifier.
  */
 
 export const CRISIS_KEYWORDS: readonly string[] = [
@@ -128,6 +122,8 @@ export const CRISIS_KEYWORDS: readonly string[] = [
   "hurt myself",
   "kill myself",
   "killing myself",
+  "kill self",
+  "kms",
   "suicide",
   "suicidal",
   "end my life",
@@ -136,13 +132,25 @@ export const CRISIS_KEYWORDS: readonly string[] = [
   "wanna die",
   "wish i was dead",
   "wish i were dead",
+  "feel like dying",
+  "hang myself",
+  "overdose",
+  "cut myself",
+  "cant go on",
+  "tired of living",
+  "giving up on life",
   "self harm",
   "self-harm",
   "no reason to live",
   "no reason for me to live",
   "better off dead",
+  "take my own life",
+  "slit my wrist",
+  "bleed out",
+  "die alone",
+  "goodbye world",
 
-  // Hindi
+  // Hindi (Devanagari)
   "खुद को नुकसान",
   "खुदको नुकसान",
   "अपने आप को नुकसान",
@@ -161,6 +169,79 @@ export const CRISIS_KEYWORDS: readonly string[] = [
   "आत्महत्या",
   "आत्महत्या करना",
   "आत्महत्या कर",
+  "मौत चाहता",
+
+  // Hinglish
+  "mar jana chahta",
+  "mar jana chahti",
+  "marna chahta",
+  "marna chahti",
+  "jaan lena",
+  "jaan de dunga",
+  "marne ka man",
+  "khud ko nuksan",
+  "khudkushi",
+  "aatmhatya",
+  "jeene ka man nahi",
+];
+
+export const HARMFUL_ADVICE_KEYWORDS: readonly string[] = [
+  // English
+  "stop taking your medication",
+  "stop taking your medicine",
+  "stop taking medication",
+  "stop taking medicine",
+  "stop your medication",
+  "stop your medicine",
+  "stop medication",
+  "stop medicine",
+  "stop meds",
+  "stop taking meds",
+  "dont take your medicine",
+  "dont take your meds",
+  "dont take medicine",
+  "dont take medication",
+  "dont take meds",
+  "do not take your medicine",
+  "do not take your meds",
+  "do not take medicine",
+  "do not take medication",
+  "do not take meds",
+  "throw away medicine",
+  "throw away pills",
+  "leave medicine",
+  "quit medication",
+  "miracle cure",
+  "drink bleach",
+  "bleach cures",
+  "vaccines cause",
+  "doctors are hiding",
+  "doctors are lying",
+  "no medicine needed",
+  "dont need medicine",
+  "dont need doctor",
+
+  // Hindi
+  "दवा लेना बंद",
+  "दवाई लेना बंद",
+  "दवा मत लो",
+  "दवाई मत लो",
+  "दवा छोड़ दो",
+  "दवाई छोड़ दो",
+  "दवा की जरूरत नहीं",
+  "दवाई की जरूरत नहीं",
+  "डॉक्टर की जरूरत नहीं",
+  "चमत्कारी इलाज",
+  "वैक्सीन मत लगवाओ",
+
+  // Hinglish
+  "dawa mat lo",
+  "dawai mat lo",
+  "dawa lena band",
+  "dawai lena band",
+  "dawa chod do",
+  "dawai chod do",
+  "doctor ke paas mat jao",
 ];
 
 export const ABUSE_KEYWORDS: readonly string[] = [
@@ -173,8 +254,18 @@ export const ABUSE_KEYWORDS: readonly string[] = [
   "loser",
   "fuck",
   "fucking",
+  "fuk",
   "shit",
   "bastard",
+  "bitch",
+  "asshole",
+  "kill yourself",
+  "go die",
+  "stfu",
+  "ugly",
+  "trash",
+  "worthless",
+  "disgusting",
 
   // Hindi
   "बेवकूफ",
@@ -186,34 +277,16 @@ export const ABUSE_KEYWORDS: readonly string[] = [
   "गधा",
   "कमीना",
   "हरामी",
-];
+  "कुत्ता",
+  "मर जा",
 
-export const HARMFUL_ADVICE_KEYWORDS: readonly string[] = [
-  // English
-  "stop taking your medication",
-  "stop your medication",
-  "don't take your medicine",
-  "do not take your medicine",
-  "don't take medication",
-  "do not take medication",
-  "stop taking medicine",
-  "miracle cure",
-  "drink bleach",
-  "bleach cures",
-  "vaccines cause",
-  "doctors are hiding",
-  "no medicine needed",
-
-  // Hindi
-  "दवा लेना बंद",
-  "दवाई लेना बंद",
-  "दवा मत लो",
-  "दवाई मत लो",
-  "दवा की जरूरत नहीं",
-  "दवाई की जरूरत नहीं",
-  "डॉक्टर की जरूरत नहीं",
-  "चमत्कारी इलाज",
-  "वैक्सीन मत लगवाओ",
+  // Hinglish
+  "bewakoof",
+  "pagal",
+  "chup ho ja",
+  "chup kar",
+  "kamina",
+  "harami",
 ];
 
 /**

@@ -9,10 +9,8 @@ import {
   onSnapshot,
   orderBy,
   query,
-  runTransaction,
   serverTimestamp,
   setDoc,
-  where,
 } from "firebase/firestore";
 
 import { db } from "@/lib/firebase";
@@ -24,8 +22,6 @@ import type {
   Lang,
   ReportSubmission,
   SafetyCheckResult,
-  SafetyKind,
-  ScriptedMessage,
 } from "@/types";
 import {
   ABUSE_KEYWORDS,
@@ -38,17 +34,10 @@ import {
   peerLangOf,
 } from "./mock-data";
 
-
-/**
- * Backend-ready async data services.
- * In production, these will query REST endpoints, database tables, or ML inference APIs.
- */
-
 /**
  * Asynchronously fetch verified emergency helplines.
  */
 export async function getHelplines(): Promise<Helpline[]> {
-  // Simulating async network boundary
   return Promise.resolve([...HELPLINES]);
 }
 
@@ -93,12 +82,16 @@ export async function getInitialConversation(
 }
 
 /**
- * Safety moderation classifier.
- * Evaluates message text against crisis, abuse, and harmful advice rules.
+ * Robust safety moderation classifier.
+ * Evaluates message text against crisis, harmful advice, and abuse datasets.
+ * Handles contractions, punctuation, mixed case, Hindi and Romanized Hinglish.
  */
-export function evaluateSafety(
-  rawText: string
-): SafetyCheckResult {
+export function evaluateSafety(rawText: string): SafetyCheckResult {
+  if (!rawText || typeof rawText !== "string") {
+    return { kind: null };
+  }
+
+  // 1. Unicode NFC normalization and lowercasing
   const text = rawText
     .toLowerCase()
     .normalize("NFC")
@@ -109,10 +102,41 @@ export function evaluateSafety(
     return { kind: null };
   }
 
-  const crisisMatch = CRISIS_KEYWORDS.find((keyword) =>
-    text.includes(keyword.toLowerCase())
-  );
+  // 2. Cleaned text: remove apostrophes ("don't" -> "dont"), replace symbols with space
+  const cleanText = text
+    .replace(/['’`]/g, "")
+    .replace(/[^\w\s\u0900-\u097F]/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 
+  const matchesKeyword = (keyword: string) => {
+    const normKey = keyword.toLowerCase().trim();
+    const cleanKey = normKey
+      .replace(/['’`]/g, "")
+      .replace(/[^\w\s\u0900-\u097F]/gi, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    if (!normKey || !cleanKey) return false;
+
+    // Check direct substring in original or cleaned text
+    if (text.includes(normKey) || cleanText.includes(cleanKey)) {
+      return true;
+    }
+
+    // Word boundary check for single words (e.g. "kms", "suicide")
+    if (!cleanKey.includes(" ") && cleanKey.length >= 3) {
+      const regex = new RegExp(`(^|\\s)${cleanKey}($|\\s)`, "i");
+      if (regex.test(cleanText)) {
+        return true;
+      }
+    }
+
+    return false;
+  };
+
+  // Crisis detection (highest priority)
+  const crisisMatch = CRISIS_KEYWORDS.find(matchesKeyword);
   if (crisisMatch) {
     return {
       kind: "crisis",
@@ -120,25 +144,21 @@ export function evaluateSafety(
     };
   }
 
-  const abuseMatch = ABUSE_KEYWORDS.find((keyword) =>
-    text.includes(keyword.toLowerCase())
-  );
-
-  if (abuseMatch) {
-    return {
-      kind: "abuse",
-      matchedKeyword: abuseMatch,
-    };
-  }
-
-  const adviceMatch = HARMFUL_ADVICE_KEYWORDS.find((keyword) =>
-    text.includes(keyword.toLowerCase())
-  );
-
+  // Harmful advice detection (flag badge)
+  const adviceMatch = HARMFUL_ADVICE_KEYWORDS.find(matchesKeyword);
   if (adviceMatch) {
     return {
       kind: "advice",
       matchedKeyword: adviceMatch,
+    };
+  }
+
+  // Abuse detection
+  const abuseMatch = ABUSE_KEYWORDS.find(matchesKeyword);
+  if (abuseMatch) {
+    return {
+      kind: "abuse",
+      matchedKeyword: abuseMatch,
     };
   }
 
@@ -199,7 +219,6 @@ export async function createUserProfile({
   language: "en" | "hi";
 }) {
   const userRef = doc(db, "users", uid);
-
   const existingUser = await getDoc(userRef);
 
   if (existingUser.exists()) {
@@ -213,7 +232,6 @@ export async function createUserProfile({
   };
 
   await setDoc(userRef, profile);
-
   return profile;
 }
 
@@ -235,6 +253,10 @@ export async function updateUserLanguage({
   );
 }
 
+/**
+ * Matchmaking that supports BOTH multilingual (en <-> hi) and same-language (en <-> en, hi <-> hi).
+ * Prioritizes opposite language first, then pairs with any waiting user.
+ */
 export async function findOrCreateMatch({
   uid,
   language,
@@ -243,18 +265,13 @@ export async function findOrCreateMatch({
   language: "en" | "hi";
 }) {
   const waitingRef = collection(db, "waitingUsers");
-
-  // Get all currently waiting users.
-  // We intentionally avoid a compound Firestore query here
-  // to keep the MVP simple and reliable.
   const snapshot = await getDocs(waitingRef);
 
   const oppositeLanguage = language === "en" ? "hi" : "en";
 
-  // Find an opposite-language user who is actually waiting.
-  const otherDoc = snapshot.docs.find((docSnap) => {
+  // 1. First preference: opposite-language peer for multilingual translation demo
+  let otherDoc = snapshot.docs.find((docSnap) => {
     const data = docSnap.data();
-
     return (
       data.uid !== uid &&
       data.language === oppositeLanguage &&
@@ -262,7 +279,18 @@ export async function findOrCreateMatch({
     );
   });
 
-  // Nobody available yet.
+  // 2. Second preference: any other waiting peer (including same language: en <-> en, hi <-> hi)
+  if (!otherDoc) {
+    otherDoc = snapshot.docs.find((docSnap) => {
+      const data = docSnap.data();
+      return (
+        data.uid !== uid &&
+        data.status === "waiting"
+      );
+    });
+  }
+
+  // Nobody is available yet. Register as waiting.
   if (!otherDoc) {
     await setDoc(doc(db, "waitingUsers", uid), {
       uid,
@@ -277,10 +305,9 @@ export async function findOrCreateMatch({
   }
 
   const other = otherDoc.data();
-
-  // Create chat room.
   const chatRef = doc(collection(db, "chats"));
 
+  // Create chat with actual languages of both users
   await setDoc(chatRef, {
     participants: [other.uid, uid],
     languages: {
@@ -290,7 +317,7 @@ export async function findOrCreateMatch({
     createdAt: serverTimestamp(),
   });
 
-  // Mark the first user as matched.
+  // Mark the first user as matched
   await setDoc(
     doc(db, "waitingUsers", other.uid),
     {
@@ -301,7 +328,7 @@ export async function findOrCreateMatch({
     { merge: true }
   );
 
-  // Mark current user as matched.
+  // Mark current user as matched
   await setDoc(
     doc(db, "waitingUsers", uid),
     {
@@ -319,136 +346,124 @@ export async function findOrCreateMatch({
   };
 }
 
-// export function listenForMatch(
-//   uid: string,
-//   onMatched: (chatId: string) => void,
-//   onError?: (error: Error) => void
-// ) {
-//   let stopped = false;
-//   let timeoutId: ReturnType<typeof setTimeout> | null = null;
+/**
+ * Continuous match listener + proactive matcher
+ */
+export function listenForMatch(
+  uid: string,
+  onMatched: (chatId: string) => void,
+  onError?: (error: Error) => void
+) {
+  let stopped = false;
+  let timer: ReturnType<typeof setTimeout> | null = null;
 
-//   const checkMatch = async () => {
-//     if (stopped) return;
+  const check = async () => {
+    if (stopped) return;
 
-//     try {
-//       const waitingUserRef = doc(
-//         db,
-//         "waitingUsers",
-//         uid
-//       );
+    try {
+      const userRef = doc(db, "waitingUsers", uid);
+      const snapshot = await getDoc(userRef);
 
-//       const snapshot = await getDoc(waitingUserRef);
+      if (stopped) return;
 
-//       if (stopped) return;
+      if (snapshot.exists()) {
+        const data = snapshot.data();
 
-//       if (!snapshot.exists()) {
-//         timeoutId = setTimeout(checkMatch, 1000);
-//         return;
-//       }
+        if (
+          data.status === "matched" &&
+          typeof data.chatId === "string"
+        ) {
+          onMatched(data.chatId);
+          return;
+        }
+      }
 
-//       const data = snapshot.data();
+      // Proactive check: see if another user joined while we were waiting
+      const waitingRef = collection(db, "waitingUsers");
+      const allWaiting = await getDocs(waitingRef);
 
-//       if (
-//         data.status === "matched" &&
-//         typeof data.chatId === "string"
-//       ) {
-//         onMatched(data.chatId);
-//         return;
-//       }
+      if (stopped) return;
 
-//       timeoutId = setTimeout(checkMatch, 1000);
-//     } catch (error) {
-//       console.error("Match polling failed:", error);
+      const myDocSnap = snapshot.exists() ? snapshot.data() : null;
+      const myLang = myDocSnap?.language || "en";
+      const oppositeLanguage = myLang === "en" ? "hi" : "en";
 
-//       if (!stopped) {
-//         onError?.(
-//           error instanceof Error
-//             ? error
-//             : new Error("Match polling failed")
-//         );
-//       }
-//     }
-//   };
+      // Look for opposite language first, then any waiting user
+      let otherDoc = allWaiting.docs.find((d) => {
+        const data = d.data();
+        return d.id !== uid && data.language === oppositeLanguage && data.status === "waiting";
+      });
 
-//   checkMatch();
+      if (!otherDoc) {
+        otherDoc = allWaiting.docs.find((d) => {
+          const data = d.data();
+          return d.id !== uid && data.status === "waiting";
+        });
+      }
 
-//   return () => {
-//     stopped = true;
+      if (otherDoc) {
+        const other = otherDoc.data();
+        const chatRef = doc(collection(db, "chats"));
 
-//     if (timeoutId) {
-//       clearTimeout(timeoutId);
-//     }
-//   };
-// }
+        await setDoc(chatRef, {
+          participants: [other.uid, uid],
+          languages: {
+            [other.uid]: other.language,
+            [uid]: myLang,
+          },
+          createdAt: serverTimestamp(),
+        });
 
-// export async function findMyChat(uid: string) {
-//   const chatsRef = collection(db, "chats");
+        await setDoc(
+          doc(db, "waitingUsers", other.uid),
+          { status: "matched", chatId: chatRef.id, matchedWith: uid },
+          { merge: true }
+        );
 
-//   const q = query(
-//     chatsRef,
-//     where("participants", "array-contains", uid),
-//     limit(1)
-//   );
+        await setDoc(
+          doc(db, "waitingUsers", uid),
+          { status: "matched", chatId: chatRef.id, matchedWith: other.uid },
+          { merge: true }
+        );
 
-//   const snapshot = await getDocs(q);
+        onMatched(chatRef.id);
+        return;
+      }
 
-//   if (snapshot.empty) {
-//     return null;
-//   }
+      timer = setTimeout(check, 1000);
+    } catch (error) {
+      console.error("Match check error:", error);
 
-//   return snapshot.docs[0].id;
-// }
+      if (!stopped) {
+        onError?.(
+          error instanceof Error
+            ? error
+            : new Error("Match check failed")
+        );
 
-// export function waitForMyChat(
-//   uid: string,
-//   onMatched: (chatId: string) => void,
-//   onError?: (error: Error) => void
-// ) {
-//   let stopped = false;
-//   let timeoutId: ReturnType<typeof setTimeout> | null = null;
+        timer = setTimeout(check, 2000);
+      }
+    }
+  };
 
-//   const check = async () => {
-//     if (stopped) return;
+  check();
 
-//     try {
-//       const chatId = await findMyChat(uid);
+  return () => {
+    stopped = true;
 
-//       if (stopped) return;
-
-//       if (chatId) {
-//         onMatched(chatId);
-//         return;
-//       }
-
-//       timeoutId = setTimeout(check, 1000);
-//     } catch (error) {
-//       console.error("Checking for chat failed:", error);
-
-//       if (!stopped) {
-//         onError?.(
-//           error instanceof Error
-//             ? error
-//             : new Error("Unable to check for chat")
-//         );
-//       }
-//     }
-//   };
-
-//   check();
-
-//   return () => {
-//     stopped = true;
-
-//     if (timeoutId) {
-//       clearTimeout(timeoutId);
-//     }
-//   };
-// }
+    if (timer) {
+      clearTimeout(timer);
+    }
+  };
+}
 
 export async function cancelMatch(uid: string) {
-  const waitingUserRef = doc(db, "waitingUsers", uid);
-
-  await deleteDoc(waitingUserRef);
+  try {
+    const waitingUserRef = doc(db, "waitingUsers", uid);
+    await deleteDoc(waitingUserRef);
+  } catch (error) {
+    console.error("Cancel match failed:", error);
+  }
 }
 
 export async function sendMessage({
@@ -512,60 +527,4 @@ export function listenToMessages(
 
     onMessages(messages);
   });
-}
-
-export function listenForMatch(
-  uid: string,
-  onMatched: (chatId: string) => void,
-  onError?: (error: Error) => void
-) {
-  let stopped = false;
-  let timer: ReturnType<typeof setTimeout> | null = null;
-
-  const check = async () => {
-    if (stopped) return;
-
-    try {
-      const userRef = doc(db, "waitingUsers", uid);
-      const snapshot = await getDoc(userRef);
-
-      if (stopped) return;
-
-      if (snapshot.exists()) {
-        const data = snapshot.data();
-
-        if (
-          data.status === "matched" &&
-          typeof data.chatId === "string"
-        ) {
-          onMatched(data.chatId);
-          return;
-        }
-      }
-
-      timer = setTimeout(check, 1000);
-    } catch (error) {
-      console.error("Match check failed:", error);
-
-      if (!stopped) {
-        onError?.(
-          error instanceof Error
-            ? error
-            : new Error("Match check failed")
-        );
-
-        timer = setTimeout(check, 2000);
-      }
-    }
-  };
-
-  check();
-
-  return () => {
-    stopped = true;
-
-    if (timer) {
-      clearTimeout(timer);
-    }
-  };
 }

@@ -1,8 +1,10 @@
 "use client";
 
-import { FormEvent, Suspense, useEffect, useState } from "react";
+import { FormEvent, Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Send } from "lucide-react";
+import { doc, onSnapshot } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 import { SafetyModal } from "@/components/features/chat/safety-modal";
 import { ReportModal } from "@/components/features/chat/report-modal";
@@ -10,8 +12,10 @@ import { ChatHeader } from "@/components/features/chat/chat-header";
 import { MessageBubble } from "@/components/features/chat/message-bubble";
 
 import { useSessionIdentity } from "@/hooks/use-session-identity";
+import type { Lang } from "@/types";
 
 import {
+  cancelMatch,
   evaluateSafety,
   listenToMessages,
   sendMessage,
@@ -43,12 +47,42 @@ function ChatContent() {
   const chatId = searchParams.get("chatId");
 
   const [messages, setMessages] = useState<FirestoreMessage[]>([]);
+  const [peerLang, setPeerLang] = useState<Lang | null>(null);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
 
   const [safetyOpen, setSafetyOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
 
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Listen to chat room participant languages from Firestore
+  useEffect(() => {
+    if (!chatId || !firebaseUser) return;
+
+    const chatDocRef = doc(db, "chats", chatId);
+    const unsub = onSnapshot(chatDocRef, (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        if (data.languages) {
+          const otherUid = Object.keys(data.languages).find(
+            (u) => u !== firebaseUser.uid
+          );
+          if (
+            otherUid &&
+            (data.languages[otherUid] === "en" ||
+              data.languages[otherUid] === "hi")
+          ) {
+            setPeerLang(data.languages[otherUid]);
+          }
+        }
+      }
+    });
+
+    return () => unsub();
+  }, [chatId, firebaseUser]);
+
+  // Listen to real-time chat messages
   useEffect(() => {
     if (authLoading || !firebaseUser || !chatId) {
       return;
@@ -63,6 +97,11 @@ function ChatContent() {
 
     return () => unsubscribe();
   }, [firebaseUser, authLoading, chatId]);
+
+  // Auto-scroll down when messages change
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
   const handleSend = async (event: FormEvent) => {
     event.preventDefault();
@@ -89,52 +128,49 @@ function ChatContent() {
       /*
        * If crisis-related language is detected,
        * show the existing safety modal.
-       *
-       * We still allow the user to send the message.
        */
       if (safety.kind === "crisis") {
         setSafetyOpen(true);
       }
 
       /*
-       * Translate the message into the peer's language.
+       * Translate message ONLY if peer uses a different language.
        */
-      const targetLang = lang === "en" ? "hi" : "en";
+      const effectivePeerLang =
+        peerLang || (lang === "en" ? "hi" : "en");
 
-      let translatedText = trimmed;
+      let translatedText: string | null = null;
 
-      try {
-        const translationResponse = await fetch(
-          "/api/translate",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              text: trimmed,
-              from: lang,
-              to: targetLang,
-            }),
+      if (effectivePeerLang !== lang) {
+        try {
+          const translationResponse = await fetch(
+            "/api/translate",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                text: trimmed,
+                from: lang,
+                to: effectivePeerLang,
+              }),
+            }
+          );
+
+          if (translationResponse.ok) {
+            const translationData =
+              await translationResponse.json();
+
+            translatedText =
+              translationData.translation || trimmed;
           }
-        );
-
-        if (translationResponse.ok) {
-          const translationData =
-            await translationResponse.json();
-
-          translatedText =
-            translationData.translation || trimmed;
+        } catch (translationError) {
+          console.error(
+            "Translation failed:",
+            translationError
+          );
         }
-      } catch (translationError) {
-        /*
-         * Translation failure should NOT prevent
-         * the message from being sent.
-         */
-        console.error(
-          "Translation failed:",
-          translationError
-        );
       }
 
       /*
@@ -158,7 +194,14 @@ function ChatContent() {
     }
   };
 
-  const handleLeave = () => {
+  const handleLeave = async () => {
+    if (firebaseUser) {
+      try {
+        await cancelMatch(firebaseUser.uid);
+      } catch (error) {
+        console.error("Failed to clean up match on leave:", error);
+      }
+    }
     router.push("/");
   };
 
@@ -180,7 +223,7 @@ function ChatContent() {
           <button
             type="button"
             onClick={() => router.push("/")}
-            className="mt-4 text-sm font-semibold text-teal"
+            className="mt-4 text-sm font-semibold text-teal cursor-pointer"
           >
             Return home
           </button>
@@ -194,6 +237,7 @@ function ChatContent() {
 
       <ChatHeader
         userLang={lang}
+        peerLang={peerLang || undefined}
         peerId={peerId}
         onReport={handleReport}
         onLeave={handleLeave}
@@ -241,6 +285,7 @@ function ChatContent() {
                         : message.translation
                     }
                     userLang={lang}
+                    peerLang={peerLang || undefined}
                     flaggedAdvice={
                       message.safetyKind === "advice"
                     }
@@ -249,6 +294,7 @@ function ChatContent() {
                 );
               })
             )}
+            <div ref={messagesEndRef} />
           </div>
 
           <form
@@ -259,6 +305,7 @@ function ChatContent() {
 
               <input
                 type="text"
+                autoFocus
                 value={text}
                 onChange={(event) =>
                   setText(event.target.value)
