@@ -161,7 +161,7 @@ export function HeroCard() {
       </div>
 
       {/* floating safety badge */}
-      <div
+      {/* <div
         className="fade-up absolute -bottom-5 -left-3 flex items-center gap-2 rounded-lg border border-line bg-cream px-3.5 py-2.5 shadow-[0_16px_36px_-24px_rgba(35,34,28,0.6)] sm:-left-8"
         style={{ animationDelay: "0.5s" }}
       >
@@ -174,7 +174,7 @@ export function HeroCard() {
             crisis · abuse · harmful advice
           </p>
         </div>
-      </div>
+      </div> */}
     </div>
   );
 }
