@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowRight,
   Check,
@@ -32,6 +32,9 @@ function ConnectingContent() {
     authLoading,
   } = useSessionIdentity();
 
+  const searchParams = useSearchParams();
+  const topic = searchParams.get("topic") || "";
+
   const [chatId, setChatId] = useState<string | null>(null);
   const [matchError, setMatchError] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
@@ -56,6 +59,7 @@ function ConnectingContent() {
         const result = await findOrCreateMatch({
           uid: firebaseUser.uid,
           language: lang,
+          topic: topic || undefined,
         });
 
         if (cancelled) {
@@ -129,7 +133,7 @@ function ConnectingContent() {
       cancelled = true;
       unsubscribe?.();
     };
-  }, [firebaseUser, authLoading, lang]);
+  }, [firebaseUser, authLoading, lang, topic]);
 
   /*
    * Cycle the small status messages while waiting.
@@ -178,7 +182,7 @@ function ConnectingContent() {
     }
 
     router.push(
-      `/chat?lang=${lang}&peerId=${peerId}&chatId=${chatId}`
+      `/chat?lang=${lang}&peerId=${peerId}&chatId=${chatId}&topic=${encodeURIComponent(topic)}`
     );
   };
 
@@ -208,7 +212,7 @@ function ConnectingContent() {
 
   return (
     <FlowShell
-      step={3}
+      step={4}
       onExit={handleExit}
     >
       <div className="fade-up flex w-full max-w-md flex-col items-center text-center">

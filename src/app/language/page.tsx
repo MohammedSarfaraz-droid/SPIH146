@@ -40,7 +40,7 @@ function LanguageContent() {
 
       // Pass the selected language forward explicitly.
       router.push(
-        `/connecting?lang=${lang}&peerId=${peerId}`
+        `/topic?lang=${lang}&peerId=${peerId}`
       );
     } catch (error) {
       console.error(

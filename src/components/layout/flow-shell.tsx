@@ -5,7 +5,7 @@ import { Logo } from "@/components/ui/logo";
 import { cn } from "@/lib/utils";
 import type { FlowStep } from "@/types";
 
-const STEPS = ["Anonymous", "Language", "Connect"];
+const STEPS = ["Anonymous", "Language", "Topic", "Connect"];
 
 export interface FlowShellProps {
   step: FlowStep;
@@ -79,7 +79,7 @@ export function FlowShell({
                   />
                   0{n} <span className="hidden min-[430px]:inline">{label}</span>
                 </span>
-                {n < 3 && (
+                {n < 4 && (
                   <span
                     aria-hidden="true"
                     className={cn(

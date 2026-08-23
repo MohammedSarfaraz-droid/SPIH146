@@ -260,34 +260,54 @@ export async function updateUserLanguage({
 export async function findOrCreateMatch({
   uid,
   language,
+  topic,
 }: {
   uid: string;
   language: "en" | "hi";
+  topic?: string;
 }) {
   const waitingRef = collection(db, "waitingUsers");
   const snapshot = await getDocs(waitingRef);
 
   const oppositeLanguage = language === "en" ? "hi" : "en";
 
-  // 1. First preference: opposite-language peer for multilingual translation demo
-  let otherDoc = snapshot.docs.find((docSnap) => {
+  const candidates = snapshot.docs.filter((docSnap) => {
     const data = docSnap.data();
-    return (
-      data.uid !== uid &&
-      data.language === oppositeLanguage &&
-      data.status === "waiting"
-    );
+    return data.uid !== uid && data.status === "waiting";
   });
 
-  // 2. Second preference: any other waiting peer (including same language: en <-> en, hi <-> hi)
-  if (!otherDoc) {
-    otherDoc = snapshot.docs.find((docSnap) => {
-      const data = docSnap.data();
-      return (
-        data.uid !== uid &&
-        data.status === "waiting"
-      );
-    });
+  let otherDoc: typeof candidates[0] | undefined;
+
+  if (topic) {
+    /*
+     * STRICT TOPIC MATCH: user chose a topic.
+     * Only connect with someone who chose the SAME topic.
+     * Prefer opposite language first, then same language.
+     */
+    otherDoc = candidates.find(
+      (d) => d.data().topic === topic && d.data().language === oppositeLanguage
+    );
+    if (!otherDoc) {
+      otherDoc = candidates.find((d) => d.data().topic === topic);
+    }
+    // No same-topic peer found → stay waiting. Do NOT fall back to random.
+  } else {
+    /*
+     * NO TOPIC: user skipped.
+     * Prefer others who also skipped (topic === null), then any user.
+     */
+    otherDoc = candidates.find(
+      (d) => !d.data().topic && d.data().language === oppositeLanguage
+    );
+    if (!otherDoc) {
+      otherDoc = candidates.find((d) => !d.data().topic);
+    }
+    if (!otherDoc) {
+      otherDoc = candidates.find((d) => d.data().language === oppositeLanguage);
+    }
+    if (!otherDoc) {
+      otherDoc = candidates[0];
+    }
   }
 
   // Nobody is available yet. Register as waiting.
@@ -295,6 +315,7 @@ export async function findOrCreateMatch({
     await setDoc(doc(db, "waitingUsers", uid), {
       uid,
       language,
+      topic: topic || null,
       status: "waiting",
       createdAt: serverTimestamp(),
     });
@@ -314,6 +335,7 @@ export async function findOrCreateMatch({
       [other.uid]: other.language,
       [uid]: language,
     },
+    topic: topic || other.topic || null,
     createdAt: serverTimestamp(),
   });
 
@@ -388,17 +410,41 @@ export function listenForMatch(
       const myLang = myDocSnap?.language || "en";
       const oppositeLanguage = myLang === "en" ? "hi" : "en";
 
-      // Look for opposite language first, then any waiting user
-      let otherDoc = allWaiting.docs.find((d) => {
-        const data = d.data();
-        return d.id !== uid && data.language === oppositeLanguage && data.status === "waiting";
-      });
+      const myTopic = myDocSnap?.topic || null;
+      const myCandidates = allWaiting.docs.filter(
+        (d) => d.id !== uid && d.data().status === "waiting"
+      );
 
-      if (!otherDoc) {
-        otherDoc = allWaiting.docs.find((d) => {
-          const data = d.data();
-          return d.id !== uid && data.status === "waiting";
-        });
+      let otherDoc: typeof myCandidates[0] | undefined;
+
+      if (myTopic) {
+        /*
+         * Strict: only match with same-topic peer.
+         * Prefer opposite language, then same language.
+         */
+        otherDoc = myCandidates.find(
+          (d) => d.data().topic === myTopic && d.data().language === oppositeLanguage
+        );
+        if (!otherDoc) {
+          otherDoc = myCandidates.find((d) => d.data().topic === myTopic);
+        }
+        // No same-topic peer → stay waiting
+      } else {
+        /*
+         * No topic: prefer others who also skipped, then anyone.
+         */
+        otherDoc = myCandidates.find(
+          (d) => !d.data().topic && d.data().language === oppositeLanguage
+        );
+        if (!otherDoc) {
+          otherDoc = myCandidates.find((d) => !d.data().topic);
+        }
+        if (!otherDoc) {
+          otherDoc = myCandidates.find((d) => d.data().language === oppositeLanguage);
+        }
+        if (!otherDoc) {
+          otherDoc = myCandidates[0];
+        }
       }
 
       if (otherDoc) {
@@ -411,6 +457,7 @@ export function listenForMatch(
             [other.uid]: other.language,
             [uid]: myLang,
           },
+          topic: myTopic || other.topic || null,
           createdAt: serverTimestamp(),
         });
 

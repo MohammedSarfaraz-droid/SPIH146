@@ -1,4 +1,4 @@
-export type FlowStep = 1 | 2 | 3;
+export type FlowStep = 1 | 2 | 3 | 4;
 
 export interface NavLinkItem {
   label: string;

@@ -1,8 +1,8 @@
 "use client";
 
-import { FormEvent, Suspense, useEffect, useRef, useState } from "react";
+import { FormEvent, Suspense, useEffect, useRef, useState, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Send } from "lucide-react";
+import { Mic, MicOff, Send } from "lucide-react";
 import { doc, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
@@ -50,11 +50,13 @@ function ChatContent() {
   const [peerLang, setPeerLang] = useState<Lang | null>(null);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+  const [listening, setListening] = useState(false);
 
   const [safetyOpen, setSafetyOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const recognitionRef = useRef<any>(null);
 
   // Listen to chat room participant languages from Firestore
   useEffect(() => {
@@ -102,6 +104,46 @@ function ChatContent() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Voice-to-text: toggle listening on mic button click
+  const toggleListening = useCallback(() => {
+    const SpeechRecognition =
+      (window as any).SpeechRecognition ||
+      (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      alert("Voice input is not supported in this browser. Try Chrome.");
+      return;
+    }
+
+    if (listening) {
+      recognitionRef.current?.stop();
+      setListening(false);
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognitionRef.current = recognition;
+
+    // Use user's selected language for speech recognition
+    recognition.lang = lang === "hi" ? "hi-IN" : "en-US";
+    recognition.interimResults = true;
+    recognition.maxAlternatives = 1;
+    recognition.continuous = false;
+
+    recognition.onstart = () => setListening(true);
+    recognition.onend = () => setListening(false);
+    recognition.onerror = () => setListening(false);
+
+    recognition.onresult = (event: any) => {
+      const transcript = Array.from(event.results)
+        .map((r: any) => r[0].transcript)
+        .join("");
+      setText(transcript);
+    };
+
+    recognition.start();
+  }, [lang, listening]);
 
   const handleSend = async (event: FormEvent) => {
     event.preventDefault();
@@ -310,10 +352,29 @@ function ChatContent() {
                 onChange={(event) =>
                   setText(event.target.value)
                 }
-                placeholder="Write a message..."
+                placeholder={listening ? "Listening…" : "Write or speak a message..."}
                 disabled={sending}
                 className="min-w-0 flex-1 bg-transparent px-3 py-2.5 text-sm text-ink outline-none placeholder:text-ink-faint"
               />
+
+              {/* Mic button — uses browser SpeechRecognition */}
+              <button
+                type="button"
+                onClick={toggleListening}
+                aria-label={listening ? "Stop recording" : "Start voice input"}
+                title={listening ? "Stop recording" : "Speak your message"}
+                className={
+                  listening
+                    ? "flex h-10 w-10 shrink-0 animate-pulse items-center justify-center rounded-xl bg-warm text-cream transition-colors"
+                    : "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-line bg-paper text-ink-soft transition-colors hover:border-teal/60 hover:bg-teal-wash hover:text-teal"
+                }
+              >
+                {listening ? (
+                  <MicOff className="h-4 w-4" />
+                ) : (
+                  <Mic className="h-4 w-4" />
+                )}
+              </button>
 
               <button
                 type="submit"
